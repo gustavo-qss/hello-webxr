@@ -3,7 +3,7 @@
 ## Requisitos
 
 - **Node.js** v14 ou superior — [nodejs.org](https://nodejs.org)
-- **OpenSSL** (para gerar certificados) — incluso no Git for Windows: [git-scm.com](https://git-scm.com)
+- **GIT BASH -> OpenSSL** (para gerar certificados) — incluso no Git for Windows: [git-scm.com](https://git-scm.com)
 - **Celular Android** com Chrome e suporte a ARCore — [lista de dispositivos](https://developers.google.com/ar/devices)
 - PC e celular na **mesma rede Wi-Fi**
 
@@ -14,11 +14,6 @@
 **Git Bash (Windows):**
 ```bash
 openssl req -x509 -newkey rsa:2048 -keyout key.pem -out cert.pem -days 365 -nodes -subj "//CN=localhost"
-```
-
-**PowerShell (Windows):**
-```powershell
-openssl req -x509 -newkey rsa:2048 -keyout key.pem -out cert.pem -days 365 -nodes -subj "/CN=localhost"
 ```
 
 ### 2. Liberar firewall (Windows)
