@@ -2,120 +2,557 @@
 <html lang="pt-BR">
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Hello WebXR</title>
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
     <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
         body {
-            margin: 0;
             font-family: Arial, sans-serif;
-        }
-        #info {
-            position: absolute;
-            top: 10px;
-            left: 10px;
+            background: #0f0f1a;
             color: white;
-            background: rgba(0,0,0,0.5);
-            padding: 10px;
-            border-radius: 5px;
-            z-index: 100;
+            height: 100vh;
+            overflow: hidden;
         }
+
+        /* Canvas always behind everything */
+        canvas {
+            position: fixed !important;
+            top: 0; left: 0;
+            z-index: 0;
+        }
+
+        /* --- Selection Screen --- */
+        #selection-screen {
+            position: fixed;
+            inset: 0;
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            gap: 32px;
+            background: #0f0f1a;
+        }
+
+        #selection-screen h2 {
+            font-size: 1.4rem;
+            text-align: center;
+            opacity: 0.9;
+        }
+
+        .model-cards {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .model-card {
+            background: rgba(255,255,255,0.07);
+            border: 2px solid rgba(255,255,255,0.15);
+            border-radius: 18px;
+            padding: 28px 20px;
+            cursor: pointer;
+            color: white;
+            text-align: center;
+            width: 160px;
+            transition: all 0.2s ease;
+            touch-action: manipulation;
+        }
+
+        .model-card:hover, .model-card:active {
+            background: rgba(255,255,255,0.15);
+            border-color: #00e676;
+            transform: scale(1.04);
+        }
+
+        .model-icon  { font-size: 3rem; margin-bottom: 14px; display: block; }
+        .model-name  { font-size: 1rem; font-weight: bold; margin-bottom: 6px; }
+        .model-desc  { font-size: 0.78rem; opacity: 0.6; line-height: 1.4; }
+
+        /* --- AR Overlay (always in DOM for dom-overlay feature) --- */
+        #ar-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 5;
+            pointer-events: none;
+        }
+
+        #ar-overlay > * { pointer-events: auto; }
+
+        #placement-hint {
+            position: absolute;
+            top: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 10px 22px;
+            border-radius: 24px;
+            font-size: 0.88rem;
+            text-align: center;
+            white-space: nowrap;
+            pointer-events: none;
+            display: none;
+        }
+
+        /* --- Transform Controls Panel --- */
+        #transform-controls {
+            display: none;
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(0,0,0,0.82);
+            padding: 12px 10px 18px;
+            border-top: 1px solid rgba(255,255,255,0.12);
+        }
+
+        .ctrl-section {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            justify-content: center;
+            margin-bottom: 8px;
+        }
+        .ctrl-section:last-child { margin-bottom: 0; }
+
+        .section-tag {
+            font-size: 0.58rem;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            opacity: 0.45;
+            writing-mode: vertical-lr;
+            transform: rotate(180deg);
+            min-width: 14px;
+        }
+
+        .ctrl-group {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 3px;
+        }
+
+        .ctrl-label {
+            font-size: 0.58rem;
+            opacity: 0.5;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .btn-pair { display: flex; gap: 3px; }
+
+        .cb {
+            background: rgba(255,255,255,0.12);
+            border: 1px solid rgba(255,255,255,0.22);
+            color: white;
+            border-radius: 8px;
+            width: 38px;
+            height: 38px;
+            font-size: 1.1rem;
+            cursor: pointer;
+            touch-action: manipulation;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .cb:active { background: rgba(255,255,255,0.32); }
+        .cb.scale  { background: rgba(0,200,120,0.2); border-color: rgba(0,200,120,0.45); }
+        .cb.rot    { background: rgba(140,120,255,0.2); border-color: rgba(140,120,255,0.45); }
+
+        /* --- Back Button --- */
+        #back-btn {
+            display: none;
+            position: absolute;
+            top: 20px;
+            left: 16px;
+            background: rgba(0,0,0,0.7);
+            border: 1px solid rgba(255,255,255,0.25);
+            color: white;
+            padding: 8px 18px;
+            border-radius: 22px;
+            cursor: pointer;
+            font-size: 0.88rem;
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+        }
+        #back-btn:active { background: rgba(255,255,255,0.15); }
     </style>
 </head>
 <body>
-    <div id="info">
-        <h3>WebXR Hello World</h3>
-        <p>Clique em "START AR" para começar</p>
+
+<!-- Selection Screen -->
+<div id="selection-screen">
+    <h2>Escolha um modelo 3D</h2>
+    <div class="model-cards">
+        <button class="model-card" id="select-bathroom">
+            <span class="model-icon">&#x1F6BF;</span>
+            <div class="model-name">Banheiro</div>
+            <div class="model-desc">Projeto completo de banheiro</div>
+        </button>
+        <button class="model-card" id="select-tv">
+            <span class="model-icon">&#x1F4FA;</span>
+            <div class="model-name">TV Furniture</div>
+            <div class="model-desc">Movel para televisao</div>
+        </button>
+    </div>
+</div>
+
+<!-- AR Overlay — always in DOM (required for dom-overlay XR feature) -->
+<div id="ar-overlay">
+    <div id="placement-hint">Carregando modelo...</div>
+
+    <div id="transform-controls">
+        <!-- Scale + Position -->
+        <div class="ctrl-section">
+            <span class="section-tag">Pos</span>
+
+            <div class="ctrl-group">
+                <span class="ctrl-label">Escala</span>
+                <div class="btn-pair">
+                    <button class="cb scale" data-action="scale-down">&#x2212;</button>
+                    <button class="cb scale" data-action="scale-up">&#x2B;</button>
+                </div>
+            </div>
+
+            <div class="ctrl-group">
+                <span class="ctrl-label">X</span>
+                <div class="btn-pair">
+                    <button class="cb" data-action="px-neg">&#x2190;</button>
+                    <button class="cb" data-action="px-pos">&#x2192;</button>
+                </div>
+            </div>
+
+            <div class="ctrl-group">
+                <span class="ctrl-label">Y</span>
+                <div class="btn-pair">
+                    <button class="cb" data-action="py-neg">&#x2193;</button>
+                    <button class="cb" data-action="py-pos">&#x2191;</button>
+                </div>
+            </div>
+
+            <div class="ctrl-group">
+                <span class="ctrl-label">Z</span>
+                <div class="btn-pair">
+                    <button class="cb" data-action="pz-neg">&#x2B06;</button>
+                    <button class="cb" data-action="pz-pos">&#x2B07;</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Rotation -->
+        <div class="ctrl-section">
+            <span class="section-tag">Rot</span>
+
+            <div class="ctrl-group">
+                <span class="ctrl-label">Rot X</span>
+                <div class="btn-pair">
+                    <button class="cb rot" data-action="rx-neg">&#x21BA;</button>
+                    <button class="cb rot" data-action="rx-pos">&#x21BB;</button>
+                </div>
+            </div>
+
+            <div class="ctrl-group">
+                <span class="ctrl-label">Rot Y</span>
+                <div class="btn-pair">
+                    <button class="cb rot" data-action="ry-neg">&#x21BA;</button>
+                    <button class="cb rot" data-action="ry-pos">&#x21BB;</button>
+                </div>
+            </div>
+
+            <div class="ctrl-group">
+                <span class="ctrl-label">Rot Z</span>
+                <div class="btn-pair">
+                    <button class="cb rot" data-action="rz-neg">&#x21BA;</button>
+                    <button class="cb rot" data-action="rz-pos">&#x21BB;</button>
+                </div>
+            </div>
+        </div>
     </div>
 
-    <script type="module">
-        // Importar THREE.js localmente
-        import * as THREE from './libs/three.module.js';
-        import { ARButton } from './libs/ARButton.js';
+    <button id="back-btn">&#x2190; Voltar</button>
+</div>
 
-        let camera, scene, renderer;
-        let controller;
+<script type="module">
+    import * as THREE from 'three';
+    import { ARButton } from 'three/addons/webxr/ARButton.js';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+    import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
+    import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
 
-        init();
-        animate();
+    // ── State ──────────────────────────────────────────────
+    let camera, scene, renderer, controller, reticle;
+    let hitTestSource = null;
+    let hitTestSourceRequested = false;
+    let placedObject = null;
+    let isPlaced = false;
+    let loadedModel = null;   // null while loading
+    let arButton = null;
 
-        function init() {
-            // Container
-            const container = document.createElement('div');
-            document.body.appendChild(container);
+    // ── DOM ────────────────────────────────────────────────
+    const selectionScreen   = document.getElementById('selection-screen');
+    const arOverlay         = document.getElementById('ar-overlay');
+    const placementHint     = document.getElementById('placement-hint');
+    const transformControls = document.getElementById('transform-controls');
+    const backBtn           = document.getElementById('back-btn');
 
-            // Cena
-            scene = new THREE.Scene();
+    // ── Constants ──────────────────────────────────────────
+    const SCALE_STEP = 0.15;
+    const POS_STEP   = 0.05;
+    const ROT_STEP   = THREE.MathUtils.degToRad(15);
 
-            // Câmera
-            camera = new THREE.PerspectiveCamera(
-                70,
-                window.innerWidth / window.innerHeight,
-                0.01,
-                20
-            );
+    // ── Init Three.js (at module load, no user gesture needed) ──
+    function initThree() {
+        scene  = new THREE.Scene();
+        camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.01, 20);
 
-            // Luz
-            const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1);
-            light.position.set(0.5, 1, 0.25);
-            scene.add(light);
+        const hemi = new THREE.HemisphereLight(0xffffff, 0x8888bb, 3);
+        hemi.position.set(0.5, 1, 0.25);
+        scene.add(hemi);
 
-            // Renderer
-            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-            renderer.setPixelRatio(window.dpr);
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.xr.enabled = true;
-            container.appendChild(renderer.domElement);
+        const dir = new THREE.DirectionalLight(0xffffff, 2);
+        dir.position.set(1, 2, 1);
+        scene.add(dir);
 
-            // Botão AR
-            document.body.appendChild(
-                ARButton.createButton(renderer, {
-                    requiredFeatures: ['hit-test']
-                })
-            );
+        renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setPixelRatio(devicePixelRatio);
+        renderer.setSize(innerWidth, innerHeight);
+        renderer.xr.enabled = true;
+        document.body.appendChild(renderer.domElement);
 
-            // Criar um cubo de exemplo
-            const geometry = new THREE.BoxGeometry(0.1, 0.1, 0.1);
-            const material = new THREE.MeshPhongMaterial({
-                color: 0x00ff00,
-                shininess: 100
-            });
-            const cube = new THREE.Mesh(geometry, material);
-            cube.position.set(0, 0, -0.5);
-            scene.add(cube);
+        // Reticle
+        const geom = new THREE.RingGeometry(0.12, 0.17, 32).rotateX(-Math.PI / 2);
+        const mat  = new THREE.MeshBasicMaterial({ color: 0x00e676, side: THREE.DoubleSide });
+        reticle = new THREE.Mesh(geom, mat);
+        reticle.matrixAutoUpdate = false;
+        reticle.visible = false;
+        scene.add(reticle);
 
-            // Controller para interação
-            controller = renderer.xr.getController(0);
-            controller.addEventListener('select', onSelect);
-            scene.add(controller);
+        // Controller tap → place object
+        controller = renderer.xr.getController(0);
+        controller.addEventListener('select', onSelect);
+        scene.add(controller);
 
-            // Redimensionar
-            window.addEventListener('resize', onWindowResize);
-        }
+        renderer.xr.addEventListener('sessionstart', onSessionStart);
+        renderer.xr.addEventListener('sessionend',   onSessionEnd);
 
-        function onSelect() {
-            // Adicionar um cubo na posição do controller
-            const geometry = new THREE.BoxGeometry(0.05, 0.05, 0.05);
-            const material = new THREE.MeshPhongMaterial({
-                color: Math.random() * 0xffffff
-            });
-            const mesh = new THREE.Mesh(geometry, material);
-            mesh.position.copy(controller.position);
-            scene.add(mesh);
-        }
-
-        function onWindowResize() {
-            camera.aspect = window.innerWidth / window.innerHeight;
+        window.addEventListener('resize', () => {
+            camera.aspect = innerWidth / innerHeight;
             camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setSize(innerWidth, innerHeight);
+        });
+
+        renderer.setAnimationLoop(render);
+
+        // Create hidden AR button — must exist before any session request
+        arButton = ARButton.createButton(renderer, {
+            requiredFeatures: ['hit-test'],
+            optionalFeatures: ['dom-overlay'],
+            domOverlay: { root: arOverlay }
+        });
+        arButton.style.display = 'none';
+        document.body.appendChild(arButton);
+    }
+
+    // ── Load model helpers ─────────────────────────────────
+    function autoScale(model, maxSize) {
+        const box    = new THREE.Box3().setFromObject(model);
+        const size   = box.getSize(new THREE.Vector3());
+        const maxDim = Math.max(size.x, size.y, size.z);
+        if (maxDim > 0) model.scale.setScalar(maxSize / maxDim);
+    }
+
+    function loadModel(type) {
+        if (type === 'bathroom') {
+            return new Promise((resolve, reject) => {
+                new GLTFLoader().load(
+                    './assets/Sergio - Orcamento 3 - Banheiro 1.glb',
+                    gltf => { autoScale(gltf.scene, 1.5); resolve(gltf.scene); },
+                    undefined, reject
+                );
+            });
         }
 
-        function animate() {
-            renderer.setAnimationLoop(render);
+        // TV Furniture: try MTL first, fallback to plain OBJ
+        return new Promise((resolve, reject) => {
+            const mtl = new MTLLoader();
+            mtl.setPath('./assets/');
+            mtl.load('TV Furniture.mtl',
+                materials => {
+                    materials.preload();
+                    const obj = new OBJLoader();
+                    obj.setMaterials(materials);
+                    obj.setPath('./assets/');
+                    obj.load('TV Furniture.obj',
+                        o => { autoScale(o, 1.5); resolve(o); },
+                        undefined, reject
+                    );
+                },
+                undefined,
+                () => { // MTL failed — load without materials
+                    const obj = new OBJLoader();
+                    obj.setPath('./assets/');
+                    obj.load('TV Furniture.obj',
+                        o => { autoScale(o, 1.5); resolve(o); },
+                        undefined, reject
+                    );
+                }
+            );
+        });
+    }
+
+    // ── Start AR: MUST be called synchronously from click handler ──
+    function startAR(type) {
+        loadedModel = null;
+        isPlaced    = false;
+        selectionScreen.style.display = 'none';
+
+        // ⚡ Synchronous click — user gesture is still active here
+        arButton.click();
+
+        // Load model in background while AR camera is already open
+        loadModel(type).then(model => {
+            loadedModel = model;
+            if (renderer.xr.isPresenting && !isPlaced) {
+                placementHint.textContent = 'Aponte para uma superficie plana e toque para posicionar';
+            }
+        }).catch(err => {
+            console.error('Erro ao carregar modelo:', err);
+            placementHint.textContent = 'Erro ao carregar modelo :(';
+        });
+    }
+
+    // ── XR session events ──────────────────────────────────
+    function onSessionStart() {
+        placementHint.style.display    = 'block';
+        transformControls.style.display = 'none';
+        backBtn.style.display          = 'block';
+
+        placementHint.textContent = loadedModel
+            ? 'Aponte para uma superficie plana e toque para posicionar'
+            : 'Carregando modelo...';
+
+        isPlaced               = false;
+        placedObject           = null;
+        hitTestSourceRequested = false;
+        hitTestSource          = null;
+        reticle.visible        = false;
+    }
+
+    function onSessionEnd() {
+        placementHint.style.display    = 'none';
+        transformControls.style.display = 'none';
+        backBtn.style.display          = 'none';
+
+        if (placedObject) { scene.remove(placedObject); placedObject = null; }
+        if (hitTestSource) { hitTestSource.cancel(); hitTestSource = null; }
+        hitTestSourceRequested = false;
+        isPlaced        = false;
+        reticle.visible = false;
+
+        selectionScreen.style.display = 'flex';
+    }
+
+    // ── Place object on tap (only once) ───────────────────
+    function onSelect() {
+        if (isPlaced || !reticle.visible || !loadedModel) return;
+
+        const pos  = new THREE.Vector3();
+        const quat = new THREE.Quaternion();
+        const _scl = new THREE.Vector3();
+        reticle.matrix.decompose(pos, quat, _scl);
+
+        loadedModel.position.copy(pos);
+        loadedModel.quaternion.copy(quat);
+
+        scene.add(loadedModel);
+        placedObject = loadedModel;
+        isPlaced     = true;
+
+        reticle.visible = false;
+        placementHint.style.display    = 'none';
+        transformControls.style.display = 'block';
+
+        if (hitTestSource) { hitTestSource.cancel(); hitTestSource = null; }
+    }
+
+    // ── Render loop ────────────────────────────────────────
+    function render(timestamp, frame) {
+        if (frame && !isPlaced) {
+            const refSpace = renderer.xr.getReferenceSpace();
+            const session  = renderer.xr.getSession();
+
+            if (!hitTestSourceRequested) {
+                session.requestReferenceSpace('viewer').then(vs =>
+                    session.requestHitTestSource({ space: vs }).then(src => {
+                        hitTestSource = src;
+                    })
+                );
+                hitTestSourceRequested = true;
+            }
+
+            if (hitTestSource && loadedModel) {
+                const results = frame.getHitTestResults(hitTestSource);
+                if (results.length > 0) {
+                    reticle.visible = true;
+                    reticle.matrix.fromArray(results[0].getPose(refSpace).transform.matrix);
+                } else {
+                    reticle.visible = false;
+                }
+            }
         }
 
-        function render() {
-            renderer.render(scene, camera);
-        }
-    </script>
+        renderer.render(scene, camera);
+    }
+
+    // ── Transform controls ─────────────────────────────────
+    const actions = {
+        'scale-up':   o => o.scale.multiplyScalar(1 + SCALE_STEP),
+        'scale-down': o => o.scale.multiplyScalar(Math.max(0.05, 1 - SCALE_STEP)),
+        'px-pos': o => { o.position.x += POS_STEP; },
+        'px-neg': o => { o.position.x -= POS_STEP; },
+        'py-pos': o => { o.position.y += POS_STEP; },
+        'py-neg': o => { o.position.y -= POS_STEP; },
+        'pz-pos': o => { o.position.z += POS_STEP; },
+        'pz-neg': o => { o.position.z -= POS_STEP; },
+        'rx-pos': o => { o.rotation.x += ROT_STEP; },
+        'rx-neg': o => { o.rotation.x -= ROT_STEP; },
+        'ry-pos': o => { o.rotation.y += ROT_STEP; },
+        'ry-neg': o => { o.rotation.y -= ROT_STEP; },
+        'rz-pos': o => { o.rotation.z += ROT_STEP; },
+        'rz-neg': o => { o.rotation.z -= ROT_STEP; },
+    };
+
+    document.querySelectorAll('[data-action]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            if (placedObject) actions[btn.dataset.action]?.(placedObject);
+        });
+    });
+
+    backBtn.addEventListener('click', () => {
+        const session = renderer?.xr.getSession();
+        if (session) session.end();
+        else { onSessionEnd(); }
+    });
+
+    // ── Entry points ───────────────────────────────────────
+    document.getElementById('select-bathroom').addEventListener('click', () => startAR('bathroom'));
+    document.getElementById('select-tv').addEventListener('click',       () => startAR('tv'));
+
+    // ── Boot ───────────────────────────────────────────────
+    initThree();
+</script>
 </body>
 </html>
